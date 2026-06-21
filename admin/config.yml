@@ -1,39 +1,124 @@
 # FockNote — Sveltia CMS config
 # Docs: https://sveltiacms.app/en/docs/
 #
-# The skill rewrites `repo:` below. Set it by hand only if wiring this up manually.
-#   Private mode (default): repo = your SEPARATE PRIVATE notes repo, e.g. you/focknote-notes
-#   Public mode:            repo = this same public repo, e.g. you/focknote
-# Pages serves only this app shell (code). Notes are read/written via the GitHub
-# API with YOUR token — never served by Pages — so private mode keeps them private.
+# This shell is wired to strikingwolf876/geopolitics — a private knowledge-base repo
+# (not the FockNote default content/notes layout). Collections below match its real
+# structure: knowledge/{cases,people,doctrines,ledger,sources}. Pages serves only this
+# app shell (code); notes are read/written via the GitHub API with YOUR token — never
+# served by Pages — so the knowledge base stays private.
 
 backend:
   name: github
-  repo: OWNER/NOTES_REPO   # <-- owner/repo of the repo that HOLDS YOUR NOTES
+  repo: strikingwolf876/geopolitics
   branch: main
-  # No `base_url`: MVP uses Sveltia's built-in "Sign in with Token" (PAT) login.
-  # editorial_workflow is intentionally omitted — unimplemented upstream as of 2026.
 
-# Uploaded images/files land here, in the notes repo.
-media_folder: content/media
-public_folder: /content/media
-
-# Accented characters (à, è, ò…) and emoji are stored as UTF-8 by Sveltia — no config needed.
+media_folder: knowledge/media
+public_folder: /knowledge/media
 
 collections:
-  - name: notes
-    label: Notes
-    label_singular: Note
-    folder: content/notes
+  - name: cases
+    label: Cases
+    label_singular: Case
+    folder: knowledge/cases
     create: true
     delete: true
     format: frontmatter
     extension: md
-    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
-    sortable_fields: [date, title]
+    slug: "{{slug}}"
+    sortable_fields: [timestamp, title]
     summary: "{{title}}"
     fields:
+      - { name: type, label: Type, widget: hidden, default: case }
       - { name: title, label: Title, widget: string }
-      - { name: date,  label: Date,  widget: datetime, default: "" }
-      - { name: tags,  label: Tags,  widget: list, required: false }
-      - { name: body,  label: Body,  widget: markdown }
+      - { name: source_speaker, label: Source speaker, widget: string, required: false }
+      - { name: source_format, label: Source format, widget: string, required: false }
+      - { name: resource, label: Resource, widget: string, required: false }
+      - { name: tags, label: Tags, widget: list, required: false }
+      - { name: status, label: Status, widget: string, required: false }
+      - { name: confidence, label: Confidence, widget: string, required: false }
+      - { name: timestamp, label: Timestamp, widget: datetime, required: false }
+      - { name: body, label: Body, widget: markdown }
+
+  - name: people
+    label: People (track record)
+    label_singular: Person
+    folder: knowledge/people
+    create: true
+    delete: true
+    format: frontmatter
+    extension: md
+    slug: "{{slug}}"
+    sortable_fields: [timestamp, title]
+    summary: "{{title}}"
+    fields:
+      - { name: type, label: Type, widget: hidden, default: person }
+      - { name: title, label: Full name, widget: string }
+      - { name: also_known_as, label: Also known as, widget: string, required: false }
+      - { name: affiliation, label: Affiliation, widget: string, required: false }
+      - { name: alignment, label: Alignment, widget: string, required: false }
+      - { name: resource, label: Resource, widget: string, required: false }
+      - { name: tags, label: Tags, widget: list, required: false }
+      - { name: status, label: Status, widget: string, required: false }
+      - { name: timestamp, label: Timestamp, widget: datetime, required: false }
+      - { name: body, label: Body, widget: markdown }
+
+  - name: doctrines
+    label: Doctrines
+    label_singular: Doctrine
+    folder: knowledge/doctrines
+    create: true
+    delete: true
+    format: frontmatter
+    extension: md
+    slug: "{{slug}}"
+    sortable_fields: [timestamp, title]
+    summary: "{{title}}"
+    fields:
+      - { name: type, label: Type, widget: hidden, default: doctrine }
+      - { name: title, label: Title, widget: string }
+      - { name: author, label: Author, widget: string, required: false }
+      - { name: year, label: Year, widget: string, required: false }
+      - { name: resource, label: Resource, widget: string, required: false }
+      - { name: tags, label: Tags, widget: list, required: false }
+      - { name: status, label: Status, widget: string, required: false }
+      - { name: confidence, label: Confidence, widget: string, required: false }
+      - { name: timestamp, label: Timestamp, widget: datetime, required: false }
+      - { name: body, label: Body, widget: markdown }
+
+  - name: ledger
+    label: Known-liar ledger
+    label_singular: Ledger entry
+    folder: knowledge/ledger
+    create: true
+    delete: true
+    format: frontmatter
+    extension: md
+    slug: "{{slug}}"
+    sortable_fields: [timestamp, actor]
+    summary: "{{actor}}"
+    fields:
+      - { name: type, label: Type, widget: hidden, default: liar-ledger }
+      - { name: actor, label: Actor, widget: string }
+      - { name: tags, label: Tags, widget: list, required: false }
+      - { name: status, label: Status, widget: string, required: false }
+      - { name: timestamp, label: Timestamp, widget: datetime, required: false }
+      - { name: body, label: Body, widget: markdown }
+
+  - name: sources
+    label: Sources (bias vectors)
+    label_singular: Source
+    folder: knowledge/sources
+    create: true
+    delete: true
+    format: frontmatter
+    extension: md
+    slug: "{{slug}}"
+    sortable_fields: [timestamp, title]
+    summary: "{{title}}"
+    fields:
+      - { name: type, label: Type, widget: hidden, default: source }
+      - { name: title, label: Outlet, widget: string }
+      - { name: tags, label: Tags, widget: list, required: false }
+      - { name: status, label: Status, widget: string, required: false }
+      - { name: timestamp, label: Timestamp, widget: datetime, required: false }
+      - { name: body, label: Body, widget: markdown }

@@ -1,7 +1,7 @@
 {
-  "name": "FockNote",
-  "short_name": "FockNote",
-  "description": "Own your fockin' notes.",
+  "name": "Geopolitics KB",
+  "short_name": "GeoKB",
+  "description": "Cut-through-bullshit geopolitics knowledge base.",
   "id": "./",
   "start_url": "./read/",
   "scope": "./",
