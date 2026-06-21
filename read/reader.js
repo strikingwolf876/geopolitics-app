@@ -218,7 +218,9 @@ function wikiTargets(body) {
 }
 // Collections mapped in admin/config.yml — this notebook's knowledge base, not the
 // FockNote default content/notes single folder.
-const FOLDERS = ['knowledge/cases', 'knowledge/people', 'knowledge/doctrines', 'knowledge/ledger', 'knowledge/sources'];
+const FOLDERS = ['knowledge/cases', 'knowledge/people', 'knowledge/doctrines', 'knowledge/ledger', 'knowledge/sources', 'knowledge/official-docs/agreements'];
+// Singleton files (Sveltia `files:` collection, not a folder) — done/todo receipt logs.
+const SINGLE_FILES = ['knowledge/todo-receipts.md', 'knowledge/done-receipts.md'];
 const folderLabel = (folder) => (folder || '').replace(/^knowledge\//, '');
 
 async function loadAllNotes() {
@@ -231,11 +233,18 @@ async function loadAllNotes() {
       .filter((f) => f.type === 'file' && f.name.endsWith('.md') && f.name !== 'TEMPLATE.md')
       .forEach((f) => files.push({ ...f, folder: FOLDERS[i] }));
   });
+  SINGLE_FILES.forEach((path) => files.push({ name: path.split('/').pop(), path, folder: 'receipts' }));
   NOTES = await Promise.all(files.map(async (f) => {
-    const data = await gh(`/repos/${CFG.repo}/contents/${f.path}?ref=${CFG.branch}`, TOKEN);
-    return { name: f.name.replace(/\.md$/, ''), path: f.path, folder: f.folder, sha: data.sha, ...parseNote(decodeB64(data.content)) };
+    const [data, commits] = await Promise.all([
+      gh(`/repos/${CFG.repo}/contents/${f.path}?ref=${CFG.branch}`, TOKEN),
+      // Last commit touching this file = true "last updated", unlike the frontmatter
+      // date/timestamp which is the event date and often shared across a whole ingest batch.
+      gh(`/repos/${CFG.repo}/commits?path=${encodeURIComponent(f.path)}&sha=${CFG.branch}&per_page=1`, TOKEN).catch(() => []),
+    ]);
+    const updated = commits[0]?.commit?.committer?.date || null;
+    return { name: f.name.replace(/\.md$/, ''), path: f.path, folder: f.folder, sha: data.sha, updated, ...parseNote(decodeB64(data.content)) };
   }));
-  NOTES.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  NOTES.sort((a, b) => new Date(b.updated || b.date || 0) - new Date(a.updated || a.date || 0));
   LINK_INDEX = {};
   for (const n of NOTES) {
     LINK_INDEX[n.name.toLowerCase()] = n.name;

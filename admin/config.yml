@@ -122,3 +122,48 @@ collections:
       - { name: status, label: Status, widget: string, required: false }
       - { name: timestamp, label: Timestamp, widget: datetime, required: false }
       - { name: body, label: Body, widget: markdown }
+
+  - name: official-docs-agreements
+    label: Official Docs — Agreements
+    label_singular: Agreement
+    folder: knowledge/official-docs/agreements
+    create: true
+    delete: true
+    format: frontmatter
+    extension: md
+    slug: "{{slug}}"
+    sortable_fields: [timestamp, date, title]
+    summary: "{{title}}"
+    fields:
+      - { name: type, label: Type, widget: hidden, default: official-doc }
+      - { name: title, label: Title, widget: string }
+      - { name: type_detail, label: Type detail, widget: string, required: false }
+      - { name: issuer, label: Issuer, widget: string, required: false }
+      - { name: date, label: Date, widget: string, required: false }
+      - { name: source_url, label: Source URL, widget: string, required: false }
+      - { name: source_urls, label: Source URLs, widget: list, required: false }
+      - { name: source_status, label: Source status, widget: string, required: false }
+      - { name: primary_artifact, label: Primary artifact, widget: string, required: false }
+      - { name: tags, label: Tags, widget: list, required: false }
+      - { name: timestamp, label: Timestamp, widget: datetime, required: false }
+      - { name: body, label: Body, widget: markdown }
+
+  - name: receipts
+    label: Receipts
+    files:
+      - name: todo-receipts
+        label: Todo Receipts
+        file: knowledge/todo-receipts.md
+        fields:
+          - { name: type, label: Type, widget: hidden, default: todo }
+          - { name: title, label: Title, widget: string }
+          - { name: timestamp, label: Timestamp, widget: datetime, required: false }
+          - { name: body, label: Body, widget: markdown }
+      - name: done-receipts
+        label: Done Receipts
+        file: knowledge/done-receipts.md
+        fields:
+          - { name: type, label: Type, widget: hidden, default: done-receipts }
+          - { name: title, label: Title, widget: string }
+          - { name: timestamp, label: Timestamp, widget: datetime, required: false }
+          - { name: body, label: Body, widget: markdown }
