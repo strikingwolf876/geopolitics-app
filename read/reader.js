@@ -145,12 +145,19 @@ function encodeB64(str) {
 }
 
 // ── Frontmatter ───────────────────────────────────────────────────────────────
+// This notebook's frontmatter isn't the FockNote default (title/date/tags) — it's the
+// knowledge-base schema (knowledge/{cases,people,doctrines,ledger,sources}), where the
+// "title" field is sometimes `actor` (ledger) and the "date" field is `timestamp`. We
+// detect which key each note actually uses, and patch only that key on save so the
+// rest of the frontmatter (resource, status, confidence, type, …) survives untouched.
 function parseNote(raw) {
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!m) return { title: '', date: '', tags: [], body: raw };
+  if (!m) return { fmRaw: '', titleKey: 'title', dateKey: 'date', title: '', date: '', tags: [], body: raw };
   const fm = m[1], body = m[2];
-  const title = (fm.match(/^title:\s*(.+)$/m) || [])[1]?.trim().replace(/^["']|["']$/g, '') || '';
-  const date = (fm.match(/^date:\s*(.+)$/m) || [])[1]?.trim().replace(/^["']|["']$/g, '') || '';
+  const titleKey = /^title:/m.test(fm) ? 'title' : (/^actor:/m.test(fm) ? 'actor' : 'title');
+  const dateKey = /^timestamp:/m.test(fm) ? 'timestamp' : (/^date:/m.test(fm) ? 'date' : 'timestamp');
+  const title = (fm.match(new RegExp(`^${titleKey}:\\s*(.+)$`, 'm')) || [])[1]?.trim().replace(/^["']|["']$/g, '') || '';
+  const date = (fm.match(new RegExp(`^${dateKey}:\\s*(.+)$`, 'm')) || [])[1]?.trim().replace(/^["']|["']$/g, '') || '';
   let tags = [];
   const inline = fm.match(/^tags:\s*\[(.*)\]\s*$/m);
   if (inline) {
@@ -159,12 +166,30 @@ function parseNote(raw) {
     const block = fm.match(/^tags:\s*\n((?:\s*-\s*.+\n?)+)/m);
     if (block) tags = block[1].split('\n').map((l) => (l.match(/-\s*(.+)/) || [])[1]?.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
   }
-  return { title, date, tags, body };
+  return { fmRaw: fm, titleKey, dateKey, title, date, tags, body };
 }
 
-function buildFm({ title, date, tags }) {
-  const tagStr = tags.length ? `\n${tags.map((t) => `  - ${t}`).join('\n')}` : ' []';
-  return `---\ntitle: "${title.replace(/"/g, '\\"')}"\ndate: "${date}"\ntags:${tagStr}\n---\n`;
+// Patch only title/date/tags lines inside the ORIGINAL frontmatter block, leaving every
+// other field (resource, status, confidence, type, author, …) byte-for-byte intact.
+function patchFm(fmRaw, { titleKey, title, dateKey, date, tags }) {
+  let fm = fmRaw;
+  const titleLine = `${titleKey}: "${title.replace(/"/g, '\\"')}"`;
+  fm = new RegExp(`^${titleKey}:.*$`, 'm').test(fm)
+    ? fm.replace(new RegExp(`^${titleKey}:.*$`, 'm'), titleLine)
+    : `${titleLine}\n${fm}`;
+  const dateLine = `${dateKey}: "${date}"`;
+  fm = new RegExp(`^${dateKey}:.*$`, 'm').test(fm)
+    ? fm.replace(new RegExp(`^${dateKey}:.*$`, 'm'), dateLine)
+    : `${fm}\n${dateLine}`;
+  const tagsLine = `tags: [${tags.join(', ')}]`;
+  if (/^tags:\s*\n(?:\s*-\s*.+\n?)+/m.test(fm)) fm = fm.replace(/^tags:\s*\n(?:\s*-\s*.+\n?)+/m, `${tagsLine}\n`);
+  else if (/^tags:.*$/m.test(fm)) fm = fm.replace(/^tags:.*$/m, tagsLine);
+  else fm = `${fm}\n${tagsLine}`;
+  return `---\n${fm}\n---\n`;
+}
+
+function buildNewFm({ title, date, tags }) {
+  return `---\ntype: case\ntitle: "${title.replace(/"/g, '\\"')}"\ntags: [${tags.join(', ')}]\nstatus: draft\ntimestamp: "${date}"\n---\n`;
 }
 
 function fmtDate(d) {
@@ -191,12 +216,23 @@ function wikiTargets(body) {
   while ((m = re.exec(body || ''))) out.push(m[1].trim());
   return out;
 }
+// Collections mapped in admin/config.yml — this notebook's knowledge base, not the
+// FockNote default content/notes single folder.
+const FOLDERS = ['knowledge/cases', 'knowledge/people', 'knowledge/doctrines', 'knowledge/ledger', 'knowledge/sources'];
+
 async function loadAllNotes() {
-  const items = await gh(`/repos/${CFG.repo}/contents/content/notes?ref=${CFG.branch}`, TOKEN);
-  const files = items.filter((f) => f.type === 'file' && f.name.endsWith('.md'));
+  const lists = await Promise.all(FOLDERS.map((folder) =>
+    gh(`/repos/${CFG.repo}/contents/${folder}?ref=${CFG.branch}`, TOKEN).catch(() => [])
+  ));
+  const files = [];
+  lists.forEach((items, i) => {
+    (items || [])
+      .filter((f) => f.type === 'file' && f.name.endsWith('.md') && f.name !== 'TEMPLATE.md')
+      .forEach((f) => files.push({ ...f, folder: FOLDERS[i] }));
+  });
   NOTES = await Promise.all(files.map(async (f) => {
     const data = await gh(`/repos/${CFG.repo}/contents/${f.path}?ref=${CFG.branch}`, TOKEN);
-    return { name: f.name.replace(/\.md$/, ''), sha: data.sha, ...parseNote(decodeB64(data.content)) };
+    return { name: f.name.replace(/\.md$/, ''), path: f.path, folder: f.folder, sha: data.sha, ...parseNote(decodeB64(data.content)) };
   }));
   NOTES.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
   LINK_INDEX = {};
@@ -224,11 +260,12 @@ async function createNote({ title, date, tags = [], body = '' }) {
   const base = `${datePart(d)}-${slugify(title) || 'untitled'}`;
   let name = base, i = 2;
   while (NOTES.some((x) => x.name === name)) name = `${base}-${i++}`;
-  const path = `content/notes/${name}.md`;
-  const raw = buildFm({ title, date: d, tags }) + body + '\n';
+  const folder = 'knowledge/cases';
+  const path = `${folder}/${name}.md`;
+  const raw = buildNewFm({ title, date: d, tags }) + body + '\n';
   const result = await ghPut(`/repos/${CFG.repo}/contents/${path}`, TOKEN,
     { message: `create: ${title}`, content: encodeB64(raw), branch: CFG.branch });
-  const note = { name, sha: result.content.sha, title, date: d, tags, body };
+  const note = { name, path, folder, sha: result.content.sha, titleKey: 'title', dateKey: 'timestamp', title, date: d, tags, body };
   NOTES.unshift(note);
   LINK_INDEX[name.toLowerCase()] = name;
   if (title) LINK_INDEX[title.toLowerCase()] = name;
@@ -446,7 +483,7 @@ async function saveNote() {
   const tagsEl = propsEl?.querySelector('.prop-tags');
   const newDate = dateEl ? (dateEl.value ? dateEl.value + 'T00:00:00.000Z' : '') : NOTE.date;
   const newTags = tagsEl ? tagsEl.value.split(',').map((s) => s.trim()).filter(Boolean) : NOTE.tags;
-  const raw = buildFm({ title: newTitle, date: newDate, tags: newTags }) + newBody + '\n';
+  const raw = patchFm(NOTE.fmRaw, { titleKey: NOTE.titleKey, title: newTitle, dateKey: NOTE.dateKey, date: newDate, tags: newTags }) + newBody + '\n';
 
   try {
     const result = await ghPut(
@@ -529,14 +566,13 @@ async function renderNote(name) {
   showState('Loading…');
   clearFabs();
   document.body.classList.remove('editing');
-  const path = `content/notes/${name}.md`;
-  const [data] = await Promise.all([
-    gh(`/repos/${CFG.repo}/contents/${path}?ref=${CFG.branch}`, TOKEN),
-    ensureNotes(), // cache + link index, so [[links]] resolve and backlinks compute
-  ]);
+  await ensureNotes(); // cache + link index, so [[links]] resolve, backlinks compute, and we know which folder this note lives in
+  const cached = NOTES.find((x) => x.name === name);
+  if (!cached) { showState('Note not found.', true); return; }
+  const data = await gh(`/repos/${CFG.repo}/contents/${cached.path}?ref=${CFG.branch}`, TOKEN);
   const n = parseNote(decodeB64(data.content));
 
-  NOTE = { name, path, sha: data.sha, title: n.title, date: n.date, tags: n.tags, body: n.body };
+  NOTE = { name, path: cached.path, folder: cached.folder, sha: data.sha, fmRaw: n.fmRaw, titleKey: n.titleKey, dateKey: n.dateKey, title: n.title, date: n.date, tags: n.tags, body: n.body };
 
   const backlinks = NOTES.filter((o) => o.name !== name && wikiTargets(o.body).some((t) => resolveLink(t) === name));
   const backlinksHtml = backlinks.length ? `
