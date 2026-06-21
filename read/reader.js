@@ -336,7 +336,7 @@ async function openDaily() {
 function propsView(n) {
   const chips = [];
   if (n.date) chips.push(`<span class="chip"><span class="k">📅</span> ${esc(fmtDate(n.date))}</span>`);
-  (n.tags || []).forEach((t) => chips.push(`<span class="chip"><span class="k">🏷</span> ${esc(t)}</span>`));
+  (n.tags || []).forEach((t) => chips.push(`<a class="chip chip-tag" href="#/?tag=${encodeURIComponent(t)}"><span class="k">🏷</span> ${esc(t)}</a>`));
   return chips.join('');
 }
 function propsEdit(n) {
@@ -550,7 +550,7 @@ async function saveNote() {
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────────
-async function renderList() {
+async function renderList(activeTag) {
   showState('Loading notes…');
   clearFabs();
   NOTE = null;
@@ -560,6 +560,8 @@ async function renderList() {
     showState('No notes yet. Create one in the CMS, then come back.', false);
     return;
   }
+  const filterHtml = activeTag
+    ? `<a class="active-filter" href="#/">🏷 ${esc(activeTag)} <span class="x">✕</span></a>` : '';
   app.innerHTML = `<section class="list">
     <div class="list-head">
       <h2>Notes</h2>
@@ -569,6 +571,7 @@ async function renderList() {
       </div>
     </div>
     <input class="search" type="search" placeholder="Search notes…" aria-label="Search notes" autocomplete="off">
+    <div class="filter-row">${filterHtml}</div>
     <div class="cards"></div>
   </section>`;
   app.querySelector('#newNote').onclick = newNote;
@@ -578,7 +581,8 @@ async function renderList() {
   const searchEl = app.querySelector('.search');
   const draw = (q) => {
     const query = (q || '').trim().toLowerCase();
-    const hits = !query ? NOTES : NOTES.filter((n) =>
+    let pool = activeTag ? NOTES.filter((n) => (n.tags || []).includes(activeTag)) : NOTES;
+    const hits = !query ? pool : pool.filter((n) =>
       (n.title || '').toLowerCase().includes(query) ||
       (n.tags || []).join(' ').toLowerCase().includes(query) ||
       (n.body || '').toLowerCase().includes(query));
@@ -588,13 +592,22 @@ async function renderList() {
           <div class="t">${esc(n.title) || n.name}</div>
           <div class="m">
             <span class="path-badge" title="${esc(n.path)}">${esc(folderLabel(n.folder))}</span>
-            ${[fmtDate(n.date), (n.tags || []).join(' · ')].filter(Boolean).join('  —  ')}
+            ${[fmtDate(n.date)].filter(Boolean).join('  —  ')}
           </div>
+          ${(n.tags || []).length ? `<div class="tags">${(n.tags || []).map((t) => `<span class="tag-chip" data-tag="${esc(t)}">#${esc(t)}</span>`).join('')}</div>` : ''}
         </a>`).join('')
-      : `<div class="state">No notes match “${esc(query)}”.</div>`;
+      : `<div class="state">No notes match “${esc(query)}”${activeTag ? ` in #${esc(activeTag)}` : ''}.</div>`;
   };
   draw('');
   searchEl.addEventListener('input', () => draw(searchEl.value));
+  cardsEl.addEventListener('click', (e) => {
+    const chip = e.target.closest('.tag-chip');
+    if (!chip) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const t = chip.dataset.tag;
+    location.hash = activeTag === t ? '#/' : `#/?tag=${encodeURIComponent(t)}`;
+  });
 }
 
 async function renderNote(name) {
@@ -646,9 +659,10 @@ async function route() {
   if (!TOKEN) { askToken(); return; }
 
   const hash = location.hash.replace(/^#\/?/, '');
+  const [path, qs = ''] = hash.split('?');
   try {
-    if (hash.startsWith('note/')) await renderNote(decodeURIComponent(hash.slice(5)));
-    else await renderList();
+    if (path.startsWith('note/')) await renderNote(decodeURIComponent(path.slice(5)));
+    else await renderList(new URLSearchParams(qs).get('tag'));
   } catch (e) {
     if (e.code === 401) { askToken(); return; }
     if (e.code === 404) { showState('Notes not found. Check the repo/branch in config, and that your token can read it.', true); return; }
