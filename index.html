@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>FockNote — Own your fockin' notes.</title>
+  <meta name="description" content="Own your fockin' notes." />
+  <meta name="theme-color" content="#0d1117" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192-maskable.png" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100dvh; display: grid; place-items: center;
+      font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #0d1117; color: #e6edf3; text-align: center; padding: 24px;
+    }
+    main { max-width: 32rem; }
+    .logo { font-size: 4rem; line-height: 1; margin: 0 0 .25rem; }
+    h1 { font-size: 2rem; margin: 0 0 .25rem; letter-spacing: -.02em; }
+    .tag { color: #7d8590; margin: 0 0 2rem; }
+    a.btn {
+      display: inline-block; margin: .375rem; padding: .75rem 1.5rem; border-radius: 999px;
+      text-decoration: none; font-weight: 600;
+    }
+    .primary { background: #2f81f7; color: #fff; }
+    .ghost { border: 1px solid #30363d; color: #e6edf3; }
+    .hint { margin-top: 2rem; color: #7d8590; font-size: .875rem; }
+    code { background: #161b22; padding: .1rem .35rem; border-radius: 6px; }
+    #install { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="logo">🍴</p>
+    <h1>FockNote</h1>
+    <p class="tag">Own your fockin' notes.</p>
+    <a class="btn primary" href="read/">Read notes</a>
+    <a class="btn ghost" href="admin/">Open notebook</a>
+    <a class="btn ghost" id="install" href="#">Install app</a>
+    <p class="hint">
+      Tip: open this page, tap <strong>Install app</strong> (or your browser's
+      “Add to Home screen”), then open the notebook and
+      <strong>Sign in with Token</strong>.
+    </p>
+  </main>
+
+  <script>
+    // Register the service worker from the site root so its scope covers
+    // both this landing page and /admin/ (the installable app).
+    if ('serviceWorker' in navigator) {
+      addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(console.error);
+      });
+    }
+
+    // Surface the install prompt when the browser offers it.
+    let deferredPrompt = null;
+    const installBtn = document.getElementById('install');
+    addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.style.display = 'inline-block';
+    });
+    installBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBtn.style.display = 'none';
+    });
+  </script>
+</body>
+</html>

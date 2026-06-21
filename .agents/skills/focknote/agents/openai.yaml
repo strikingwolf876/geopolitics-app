@@ -1,0 +1,4 @@
+interface:
+  display_name: "FockNote"
+  short_description: "Work with FockNote git-backed notes and memory bridge"
+  default_prompt: "Use the FockNote skill for this repo."

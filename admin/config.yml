@@ -1,0 +1,39 @@
+# FockNote — Sveltia CMS config
+# Docs: https://sveltiacms.app/en/docs/
+#
+# The skill rewrites `repo:` below. Set it by hand only if wiring this up manually.
+#   Private mode (default): repo = your SEPARATE PRIVATE notes repo, e.g. you/focknote-notes
+#   Public mode:            repo = this same public repo, e.g. you/focknote
+# Pages serves only this app shell (code). Notes are read/written via the GitHub
+# API with YOUR token — never served by Pages — so private mode keeps them private.
+
+backend:
+  name: github
+  repo: OWNER/NOTES_REPO   # <-- owner/repo of the repo that HOLDS YOUR NOTES
+  branch: main
+  # No `base_url`: MVP uses Sveltia's built-in "Sign in with Token" (PAT) login.
+  # editorial_workflow is intentionally omitted — unimplemented upstream as of 2026.
+
+# Uploaded images/files land here, in the notes repo.
+media_folder: content/media
+public_folder: /content/media
+
+# Accented characters (à, è, ò…) and emoji are stored as UTF-8 by Sveltia — no config needed.
+
+collections:
+  - name: notes
+    label: Notes
+    label_singular: Note
+    folder: content/notes
+    create: true
+    delete: true
+    format: frontmatter
+    extension: md
+    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
+    sortable_fields: [date, title]
+    summary: "{{title}}"
+    fields:
+      - { name: title, label: Title, widget: string }
+      - { name: date,  label: Date,  widget: datetime, default: "" }
+      - { name: tags,  label: Tags,  widget: list, required: false }
+      - { name: body,  label: Body,  widget: markdown }

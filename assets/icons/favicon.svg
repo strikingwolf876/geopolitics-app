@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FockNote">
+  <rect width="512" height="512" rx="112" fill="#0d1117"/>
+  <!-- Fork: stem + three tines, the git-fork wink -->
+  <g fill="none" stroke="#2f81f7" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M256 300 V408"/>
+    <path d="M168 132 V210 a88 88 0 0 0 176 0 V132"/>
+    <path d="M256 132 V236"/>
+  </g>
+</svg>

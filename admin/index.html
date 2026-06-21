@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>FockNote</title>
+  <meta name="description" content="Own your fockin' notes." />
+  <meta name="theme-color" content="#0d1117" />
+  <!-- Manifest + icons live at the site root, one level up from /admin/. -->
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../assets/icons/icon-192-maskable.png" />
+</head>
+<body>
+  <!-- Vendored, version-pinned Sveltia CMS bundle (same-origin = offline-cacheable). -->
+  <script src="./sveltia-cms.js"></script>
+
+  <!-- The installable app opens here (/admin/), so register + update-check the root
+       service worker from this page too. Script lives at ../sw.js; its default scope
+       is the site root, which covers /admin/ — no Service-Worker-Allowed header needed. -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../sw.js').then((reg) => reg.update()).catch(() => {});
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        location.reload();
+      });
+    }
+  </script>
+</body>
+</html>
