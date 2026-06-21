@@ -219,6 +219,7 @@ function wikiTargets(body) {
 // Collections mapped in admin/config.yml — this notebook's knowledge base, not the
 // FockNote default content/notes single folder.
 const FOLDERS = ['knowledge/cases', 'knowledge/people', 'knowledge/doctrines', 'knowledge/ledger', 'knowledge/sources'];
+const folderLabel = (folder) => (folder || '').replace(/^knowledge\//, '');
 
 async function loadAllNotes() {
   const lists = await Promise.all(FOLDERS.map((folder) =>
@@ -554,7 +555,10 @@ async function renderList() {
       ? hits.map((n) => `
         <a class="card" href="#/note/${encodeURIComponent(n.name)}">
           <div class="t">${esc(n.title) || n.name}</div>
-          <div class="m">${[fmtDate(n.date), (n.tags || []).join(' · ')].filter(Boolean).join('  —  ')}</div>
+          <div class="m">
+            <span class="path-badge" title="${esc(n.path)}">${esc(folderLabel(n.folder))}</span>
+            ${[fmtDate(n.date), (n.tags || []).join(' · ')].filter(Boolean).join('  —  ')}
+          </div>
         </a>`).join('')
       : `<div class="state">No notes match “${esc(query)}”.</div>`;
   };
@@ -582,6 +586,7 @@ async function renderNote(name) {
     </section>` : '';
 
   app.innerHTML = `<article class="note">
+    <div class="path-badge" title="${esc(cached.path)}">${esc(folderLabel(cached.folder))}</div>
     <h1 class="title">${esc(n.title) || name}</h1>
     <div class="props">${propsView(NOTE)}</div>
     <div class="body">${marked.parse(n.body || '')}</div>
