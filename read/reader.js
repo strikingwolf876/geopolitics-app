@@ -336,7 +336,7 @@ async function openDaily() {
 function propsView(n) {
   const chips = [];
   if (n.date) chips.push(`<span class="chip"><span class="k">📅</span> ${esc(fmtDate(n.date))}</span>`);
-  (n.tags || []).forEach((t) => chips.push(`<a class="chip chip-tag" href="#/?tag=${encodeURIComponent(t)}"><span class="k">🏷</span> ${esc(t)}</a>`));
+  (n.tags || []).forEach((t) => chips.push(`<a class="chip chip-tag" href="${hashFor(t, null)}"><span class="k">🏷</span> ${esc(t)}</a>`));
   return chips.join('');
 }
 function propsEdit(n) {
@@ -549,8 +549,17 @@ async function saveNote() {
   }
 }
 
+// Build a list-route hash for a given tag/folder filter combo (either may be null).
+function hashFor(tag, folder) {
+  const p = new URLSearchParams();
+  if (tag) p.set('tag', tag);
+  if (folder) p.set('folder', folder);
+  const s = p.toString();
+  return s ? `#/?${s}` : '#/';
+}
+
 // ── Views ─────────────────────────────────────────────────────────────────────
-async function renderList(activeTag) {
+async function renderList(activeTag, activeFolder) {
   showState('Loading notes…');
   clearFabs();
   NOTE = null;
@@ -560,8 +569,9 @@ async function renderList(activeTag) {
     showState('No notes yet. Create one in the CMS, then come back.', false);
     return;
   }
-  const filterHtml = activeTag
-    ? `<a class="active-filter" href="#/">🏷 ${esc(activeTag)} <span class="x">✕</span></a>` : '';
+  const pills = [];
+  if (activeTag) pills.push(`<a class="active-filter" href="${hashFor(null, activeFolder)}">🏷 ${esc(activeTag)} <span class="x">✕</span></a>`);
+  if (activeFolder) pills.push(`<a class="active-filter" href="${hashFor(activeTag, null)}">📁 ${esc(folderLabel(activeFolder))} <span class="x">✕</span></a>`);
   app.innerHTML = `<section class="list">
     <div class="list-head">
       <h2>Notes</h2>
@@ -571,7 +581,7 @@ async function renderList(activeTag) {
       </div>
     </div>
     <input class="search" type="search" placeholder="Search notes…" aria-label="Search notes" autocomplete="off">
-    <div class="filter-row">${filterHtml}</div>
+    <div class="filter-row">${pills.join('')}</div>
     <div class="cards"></div>
   </section>`;
   app.querySelector('#newNote').onclick = newNote;
@@ -581,7 +591,9 @@ async function renderList(activeTag) {
   const searchEl = app.querySelector('.search');
   const draw = (q) => {
     const query = (q || '').trim().toLowerCase();
-    let pool = activeTag ? NOTES.filter((n) => (n.tags || []).includes(activeTag)) : NOTES;
+    let pool = NOTES.filter((n) =>
+      (!activeTag || (n.tags || []).includes(activeTag)) &&
+      (!activeFolder || n.folder === activeFolder));
     const hits = !query ? pool : pool.filter((n) =>
       (n.title || '').toLowerCase().includes(query) ||
       (n.tags || []).join(' ').toLowerCase().includes(query) ||
@@ -591,22 +603,27 @@ async function renderList(activeTag) {
         <a class="card" href="#/note/${encodeURIComponent(n.name)}">
           <div class="t">${esc(n.title) || n.name}</div>
           <div class="m">
-            <span class="path-badge" title="${esc(n.path)}">${esc(folderLabel(n.folder))}</span>
+            <span class="path-badge" data-folder="${esc(n.folder)}" title="${esc(n.path)}">${esc(folderLabel(n.folder))}</span>
             ${[fmtDate(n.date)].filter(Boolean).join('  —  ')}
           </div>
           ${(n.tags || []).length ? `<div class="tags">${(n.tags || []).map((t) => `<span class="tag-chip" data-tag="${esc(t)}">#${esc(t)}</span>`).join('')}</div>` : ''}
         </a>`).join('')
-      : `<div class="state">No notes match “${esc(query)}”${activeTag ? ` in #${esc(activeTag)}` : ''}.</div>`;
+      : `<div class="state">No notes match “${esc(query)}”${activeTag ? ` in #${esc(activeTag)}` : ''}${activeFolder ? ` (${esc(folderLabel(activeFolder))})` : ''}.</div>`;
   };
   draw('');
   searchEl.addEventListener('input', () => draw(searchEl.value));
   cardsEl.addEventListener('click', (e) => {
-    const chip = e.target.closest('.tag-chip');
-    if (!chip) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const t = chip.dataset.tag;
-    location.hash = activeTag === t ? '#/' : `#/?tag=${encodeURIComponent(t)}`;
+    const tagChip = e.target.closest('.tag-chip');
+    const folderChip = e.target.closest('.path-badge');
+    if (tagChip) {
+      e.preventDefault(); e.stopPropagation();
+      const t = tagChip.dataset.tag;
+      location.hash = hashFor(activeTag === t ? null : t, activeFolder);
+    } else if (folderChip) {
+      e.preventDefault(); e.stopPropagation();
+      const f = folderChip.dataset.folder;
+      location.hash = hashFor(activeTag, activeFolder === f ? null : f);
+    }
   });
 }
 
@@ -630,7 +647,7 @@ async function renderNote(name) {
     </section>` : '';
 
   app.innerHTML = `<article class="note">
-    <div class="path-badge" title="${esc(cached.path)}">${esc(folderLabel(cached.folder))}</div>
+    <a class="path-badge" href="${hashFor(null, cached.folder)}" title="${esc(cached.path)}">${esc(folderLabel(cached.folder))}</a>
     <h1 class="title">${esc(n.title) || name}</h1>
     <div class="props">${propsView(NOTE)}</div>
     <div class="body">${marked.parse(n.body || '')}</div>
@@ -662,7 +679,7 @@ async function route() {
   const [path, qs = ''] = hash.split('?');
   try {
     if (path.startsWith('note/')) await renderNote(decodeURIComponent(path.slice(5)));
-    else await renderList(new URLSearchParams(qs).get('tag'));
+    else { const p = new URLSearchParams(qs); await renderList(p.get('tag'), p.get('folder')); }
   } catch (e) {
     if (e.code === 401) { askToken(); return; }
     if (e.code === 404) { showState('Notes not found. Check the repo/branch in config, and that your token can read it.', true); return; }
