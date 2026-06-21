@@ -60,6 +60,28 @@ marked.use({ extensions: [{
   },
 }] });
 
+// ── Relative .md links ──────────────────────────────────────────────────────────
+// Knowledge-base notes cross-reference each other with plain Markdown links like
+// [imperial overstretch](imperial-overstretch.md) or [foo](cases/foo.md), not
+// [[wikilinks]]. The default renderer leaves the href as a relative path, which the
+// browser resolves against /read/ (a hash router) and 404s. Resolve the bare filename
+// against the note index instead; only fall through to a normal link for anything that
+// isn't a relative .md reference (http(s), mailto, anchors, etc).
+marked.use({ renderer: {
+  link(href, title, text) {
+    if (!/^[^:#]+\.md(#.*)?$/i.test(href || '')) {
+      const out = `<a href="${esc(href)}"${title ? ` title="${esc(title)}"` : ''} target="_blank" rel="noopener">${text}</a>`;
+      return out;
+    }
+    const base = href.split('#')[0].split('/').pop().replace(/\.md$/i, '');
+    const name = resolveLink(base);
+    const cls = name ? 'wikilink' : 'wikilink broken';
+    const linkHref = name ? `#/note/${encodeURIComponent(name)}` : '#/';
+    const tip = name ? '' : ` title="No note named ${esc(base)}"`;
+    return `<a class="${cls}" href="${linkHref}" data-wikitarget="${esc(base)}"${tip}>${text}</a>`;
+  },
+} });
+
 // Turndown: callout <div> → `> [!type] title` + quoted body (round-trip safe).
 td.addRule('callout', {
   filter: (node) => node.nodeType === 1 && node.classList && node.classList.contains('callout'),
