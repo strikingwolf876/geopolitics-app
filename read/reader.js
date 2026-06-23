@@ -238,23 +238,23 @@ function wikiTargets(body) {
   while ((m = re.exec(body || ''))) out.push(m[1].trim());
   return out;
 }
-// Collections mapped in admin/config.yml — this notebook's knowledge base, not the
-// FockNote default content/notes single folder.
-const FOLDERS = ['knowledge/cases', 'knowledge/people', 'knowledge/doctrines', 'knowledge/ledger', 'knowledge/sources', 'knowledge/official-docs/agreements'];
+// Folders are discovered at runtime (git tree, below) — nothing here is hardcoded, so any
+// new knowledge/** subfolder (e.g. a new official-docs category) shows up with zero code
+// changes. Sveltia CMS itself still needs one `collections:` entry per folder in
+// admin/config.yml to make a folder *editable/creatable* there — that's a CMS tool
+// limitation (no nested/dynamic collections yet), not something this reader controls.
 // Singleton files (Sveltia `files:` collection, not a folder) — done/todo receipt logs.
 const SINGLE_FILES = ['knowledge/todo-receipts.md', 'knowledge/done-receipts.md'];
 const folderLabel = (folder) => (folder || '').replace(/^knowledge\//, '');
 
 async function loadAllNotes() {
-  const lists = await Promise.all(FOLDERS.map((folder) =>
-    gh(`/repos/${CFG.repo}/contents/${folder}?ref=${CFG.branch}`, TOKEN).catch(() => [])
-  ));
-  const files = [];
-  lists.forEach((items, i) => {
-    (items || [])
-      .filter((f) => f.type === 'file' && f.name.endsWith('.md') && f.name !== 'TEMPLATE.md')
-      .forEach((f) => files.push({ ...f, folder: FOLDERS[i] }));
-  });
+  // One recursive tree call discovers every .md under knowledge/** — no folder list to maintain.
+  const tree = await gh(`/repos/${CFG.repo}/git/trees/${CFG.branch}?recursive=1`, TOKEN);
+  const singleSet = new Set(SINGLE_FILES);
+  const files = (tree.tree || [])
+    .filter((f) => f.type === 'blob' && f.path.startsWith('knowledge/') && f.path.endsWith('.md')
+      && f.path.split('/').pop() !== 'TEMPLATE.md' && !singleSet.has(f.path))
+    .map((f) => ({ name: f.path.split('/').pop(), path: f.path, folder: f.path.slice(0, f.path.lastIndexOf('/')) }));
   SINGLE_FILES.forEach((path) => files.push({ name: path.split('/').pop(), path, folder: 'receipts' }));
   NOTES = await Promise.all(files.map(async (f) => {
     const [data, commits] = await Promise.all([
