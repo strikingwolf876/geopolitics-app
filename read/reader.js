@@ -243,8 +243,11 @@ function wikiTargets(body) {
 // changes. Sveltia CMS itself still needs one `collections:` entry per folder in
 // admin/config.yml to make a folder *editable/creatable* there — that's a CMS tool
 // limitation (no nested/dynamic collections yet), not something this reader controls.
-// Singleton files (Sveltia `files:` collection, not a folder) — done/todo receipt logs.
-const SINGLE_FILES = ['knowledge/todo-receipts.md', 'knowledge/done-receipts.md'];
+// Singleton files (Sveltia `files:` collection, not a folder) — receipt logs.
+// done-receipts.md is intentionally NOT here: the KB policy forbids a separate
+// resolved-receipts ledger (it's gitignored), so it never exists in the repo.
+// Any singleton that happens to be absent is skipped at load time (see loadAllNotes).
+const SINGLE_FILES = ['knowledge/todo-receipts.md'];
 const folderLabel = (folder) => (folder || '').replace(/^knowledge\//, '');
 
 async function loadAllNotes() {
@@ -256,16 +259,19 @@ async function loadAllNotes() {
       && f.path.split('/').pop() !== 'TEMPLATE.md' && !singleSet.has(f.path))
     .map((f) => ({ name: f.path.split('/').pop(), path: f.path, folder: f.path.slice(0, f.path.lastIndexOf('/')) }));
   SINGLE_FILES.forEach((path) => files.push({ name: path.split('/').pop(), path, folder: 'receipts' }));
-  NOTES = await Promise.all(files.map(async (f) => {
-    const [data, commits] = await Promise.all([
-      gh(`/repos/${CFG.repo}/contents/${f.path}?ref=${CFG.branch}`, TOKEN),
-      // Last commit touching this file = true "last updated", unlike the frontmatter
-      // date/timestamp which is the event date and often shared across a whole ingest batch.
-      gh(`/repos/${CFG.repo}/commits?path=${encodeURIComponent(f.path)}&sha=${CFG.branch}&per_page=1`, TOKEN).catch(() => []),
-    ]);
+  const loaded = await Promise.all(files.map(async (f) => {
+    // A missing optional singleton (e.g. todo-receipts.md not yet generated) must not
+    // sink the whole load — swallow its 404 and drop it, like the folder walk does.
+    let data;
+    try { data = await gh(`/repos/${CFG.repo}/contents/${f.path}?ref=${CFG.branch}`, TOKEN); }
+    catch (e) { if (e.code === 404) return null; throw e; }
+    // Last commit touching this file = true "last updated", unlike the frontmatter
+    // date/timestamp which is the event date and often shared across a whole ingest batch.
+    const commits = await gh(`/repos/${CFG.repo}/commits?path=${encodeURIComponent(f.path)}&sha=${CFG.branch}&per_page=1`, TOKEN).catch(() => []);
     const updated = commits[0]?.commit?.committer?.date || null;
     return { name: f.name.replace(/\.md$/, ''), path: f.path, folder: f.folder, sha: data.sha, updated, ...parseNote(decodeB64(data.content)) };
   }));
+  NOTES = loaded.filter(Boolean);
   NOTES.sort((a, b) => new Date(b.updated || b.date || 0) - new Date(a.updated || a.date || 0));
   LINK_INDEX = {};
   for (const n of NOTES) {
