@@ -2,6 +2,7 @@
 // No build step: plain ESM + vendored Markdown renderer + HTML→MD serializer.
 import { marked } from './vendor/marked.esm.js';
 import TurndownService from './vendor/turndown.browser.es.js';
+import { buildLinkIndex, resolveAgainst, outboundOf, backlinksOf } from './linkgraph.js';
 
 marked.setOptions({ gfm: true, breaks: false });
 const td = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-', codeBlockStyle: 'fenced' });
@@ -231,12 +232,7 @@ let NOTES = [];        // cache of all notes — powers search + the [[link]] gr
 let LINK_INDEX = {};   // lowercased name/title → canonical note name
 
 function resolveLink(target) {
-  return LINK_INDEX[(target || '').trim().toLowerCase()] || null;
-}
-function wikiTargets(body) {
-  const out = []; const re = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g; let m;
-  while ((m = re.exec(body || ''))) out.push(m[1].trim());
-  return out;
+  return resolveAgainst(LINK_INDEX, target);
 }
 // Folders are discovered at runtime (git tree, below) — nothing here is hardcoded, so any
 // new knowledge/** subfolder (e.g. a new official-docs category) shows up with zero code
@@ -273,11 +269,7 @@ async function loadAllNotes() {
   }));
   NOTES = loaded.filter(Boolean);
   NOTES.sort((a, b) => new Date(b.updated || b.date || 0) - new Date(a.updated || a.date || 0));
-  LINK_INDEX = {};
-  for (const n of NOTES) {
-    LINK_INDEX[n.name.toLowerCase()] = n.name;
-    if (n.title) LINK_INDEX[n.title.toLowerCase()] = n.name;
-  }
+  LINK_INDEX = buildLinkIndex(NOTES);
   return NOTES;
 }
 async function ensureNotes() {
@@ -645,19 +637,24 @@ async function renderNote(name) {
 
   NOTE = { name, path: cached.path, folder: cached.folder, sha: data.sha, fmRaw: n.fmRaw, titleKey: n.titleKey, dateKey: n.dateKey, title: n.title, date: n.date, tags: n.tags, body: n.body };
 
-  const backlinks = NOTES.filter((o) => o.name !== name && wikiTargets(o.body).some((t) => resolveLink(t) === name));
-  const backlinksHtml = backlinks.length ? `
-    <section class="backlinks">
-      <h3>Linked from</h3>
-      ${backlinks.map((o) => `<a class="backlink" href="#/note/${encodeURIComponent(o.name)}">${esc(o.title) || o.name}</a>`).join('')}
-    </section>` : '';
+  // Related = this note's forward edges (curated frontmatter [[slug]]s + relative .md
+  // body links). Backlinks = every other note whose forward edges point back at this one.
+  const related = outboundOf(NOTE, LINK_INDEX).map((nm) => NOTES.find((x) => x.name === nm)).filter(Boolean);
+  const backlinks = backlinksOf(NOTES, LINK_INDEX, name).map((nm) => NOTES.find((x) => x.name === nm)).filter(Boolean);
+  const relChip = (o) => `<a class="rel-chip" href="#/note/${encodeURIComponent(o.name)}">${esc(o.title) || o.name}</a>`;
+  const relGroup = (label, list) => list.length
+    ? `<div class="rel-group"><h3 class="rel-label">${esc(label)}</h3><div class="rel-chips">${list.map(relChip).join('')}</div></div>`
+    : '';
+  const relatedHtml = (related.length || backlinks.length)
+    ? `<section class="related">${relGroup('Related', related)}${relGroup('Backlinks', backlinks)}</section>`
+    : '';
 
   app.innerHTML = `<article class="note">
     <a class="path-badge" href="${hashFor(null, cached.folder)}" title="${esc(cached.path)}">${esc(folderLabel(cached.folder))}</a>
     <h1 class="title">${esc(n.title) || name}</h1>
     <div class="props">${propsView(NOTE)}</div>
     <div class="body">${marked.parse(n.body || '')}</div>
-    ${backlinksHtml}
+    ${relatedHtml}
   </article>`;
 
   const bodyEl = document.querySelector('.note .body');

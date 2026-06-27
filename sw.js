@@ -7,7 +7,7 @@
  *    layer talks straight to GitHub over the network; we never cache reads/writes.
  * Bump CACHE when the vendored bundle is re-vendored to evict the old one.
  */
-const CACHE = 'focknote-v13-sveltia-0.166.3';
+const CACHE = 'focknote-v14-sveltia-0.166.3';
 
 const SHELL = [
   './',
@@ -17,6 +17,7 @@ const SHELL = [
   './read/index.html',
   './read/reader.css',
   './read/reader.js',
+  './read/linkgraph.js',
   './read/vendor/marked.esm.js',
   './read/vendor/turndown.browser.es.js',
   './admin/',
